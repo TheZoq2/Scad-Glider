@@ -42,10 +42,13 @@ fn cut_cone(d1: f32, d2: f32, height: f32) -> ScadObject
 fn servo() -> ScadObject
 {
     let box_size = vec3(24.0, 13.0, 22.0);
-    let screw_diameter = 2.0;
+    let screw_diameter = 3.0;
     let screw_mount_size = vec3(33.0, box_size.y, 2.5);
+    let screw_height = 10.0;
+    let screw_edge_offset = 2.0;
 
     let mount_offset = vec3(0.0, 0.0, 16.0);
+
 
     let mut base_cube = scad!(
         Translate(-vec3(box_size.x / 2.0, 0.0, 0.0));
@@ -53,16 +56,35 @@ fn servo() -> ScadObject
             scad!(Cube(box_size))
         });
 
+    //Creating the screws for the servo
+    let mut screws = {
+        let mut result = scad!(Translate(vec3(0.0, box_size.y/2.0, mount_offset.z - screw_height / 2.0)));
+
+        for i in &[-1.0,1.0]
+        {
+            let x_offset = screw_mount_size.x / 2.0 - screw_edge_offset;
+
+            let mut screw = 
+            scad!(
+                Translate(vec3(i * x_offset, 0.0, 0.0));
+                scad!(Cylinder(screw_height, Diameter(screw_diameter)))
+            );
+
+            result.add_child(screw);
+        }
+        result
+    };
+
     let screw_mount = scad!(
         Translate(
                 -vec3(screw_mount_size.x / 2.0, 0.0, 0.0) +
                 mount_offset
             );
         {
-            scad!(Cube(screw_mount_size))
+            scad!(Cube(screw_mount_size)),
         });
 
-    scad!(Union;{base_cube, screw_mount})
+    scad!(Union;{base_cube, screw_mount, screws})
 }
 
 fn glider_body_shape() -> ScadObject
@@ -93,7 +115,7 @@ fn glider_body_shape() -> ScadObject
 }
 fn glider_body() -> ScadObject
 {
-    let inner_scale = 0.95;
+    let inner_scale = 0.9;
 
     scad!(Difference;
     {
@@ -121,8 +143,9 @@ pub fn main()
         });
 
 
-    write_result(&translation);
+    //write_result(&translation);
+    write_result(&servo());
 
     //Print the result
-    println!("{}", translation.get_code());
+    //println!("{}", translation.get_code());
 }
