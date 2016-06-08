@@ -9,23 +9,6 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
 
-fn write_result(object: &ScadObject)
-{
-    //Writing the result to file
-    let path = Path::new("glider_auto.scad");
-
-    // Open a file in write-only mode, returns `io::Result<File>`
-    let mut file = match File::create(&path) {
-        Err(_) => panic!("couldn't write file"),
-        Ok(file) => file,
-    };
-
-    match file.write(object.get_code().as_bytes()) {
-        Err(_) => panic!("Failed to write output file"),
-        Ok(_) => {}
-    };
-}
-
 fn cut_cone(d1: f32, d2: f32, height: f32) -> ScadObject
 {
     let cyl_height = 0.0000001;
@@ -143,8 +126,14 @@ pub fn main()
         });
 
 
+    let mut sfile = ScadFile::new();
+
+    sfile.set_detail(50);
+    sfile.add_object(servo());
+    sfile.write_to_file(String::from("glider_auto.scad"));
+
     //write_result(&translation);
-    write_result(&servo());
+    //write_result(&servo());
 
     //Print the result
     //println!("{}", translation.get_code());
