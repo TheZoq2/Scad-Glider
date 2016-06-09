@@ -1,4 +1,6 @@
 //"Import" the module along with the macros
+#![allow(dead_code)]
+#![allow(unused_variables)]
 #[macro_use]
 extern crate scad_generator;
 extern crate nalgebra as na;
@@ -6,9 +8,6 @@ extern crate nalgebra as na;
 //Avoid having to write scad_generator:: everywhere
 use scad_generator::*;
 
-use std::io::prelude::*;
-use std::fs::File;
-use std::path::Path;
 
 
 fn triangle(height: f32, thickness: f32) -> ScadObject
@@ -171,6 +170,126 @@ fn motor_pod() -> ScadObject
     })
 }
 
+fn wings() -> ScadObject 
+{
+    let wing_front_offset = 100.0;
+    let wingspan = 1600.0;
+    let wing_width = 230.0;
+
+    let tailspan = 520.0;
+    let tail_width = 220.0;
+    let thickness = 6.0;
+    
+    let total_length = 750.0;
+
+    scad!(Union;
+    {
+        //Main wing
+        scad!(Translate(vec3(wing_front_offset, -wingspan/2.0, 0.0));
+        {
+            scad!(Cube(vec3(wing_width, wingspan, thickness))),
+        }),
+
+        //Tail wingss
+        scad!(Translate(vec3(total_length - tail_width, -tailspan / 2.0, 0.0));
+        {
+            scad!(Cube(vec3(tail_width, tailspan, thickness)))
+        })
+    })
+}
+
+fn body() -> ScadObject
+{
+    let inner_width = 130.0;
+    let inner_height = 120.0;
+    let foam_t = 5.0;
+
+    //The outside size at the end of the body
+    let outer_back_width = 40.0;
+    let outer_back_height = 40.0;
+
+    //Calculated values
+    let outer_height = inner_height + foam_t * 4.0;
+    let outer_width = inner_width + foam_t * 4.0;
+
+    scad!(Difference;
+    {
+        //body_shape(outer_width, outer_height, outer_back_width, outer_back_height),
+        scad!(Translate(vec3(0.0, foam_t*2.0, foam_t*2.0));
+            body_shape(inner_width, inner_height, outer_back_width - foam_t * 4.0, outer_back_height - foam_t* 4.0)
+        )
+    })
+}
+
+fn body_shape(outer_width:f32, outer_height: f32, back_width: f32, back_height: f32) -> ScadObject
+{
+    let max_len = 800.0;
+
+    let bottom_chamfer_start = 350.0;
+    let side_chamfer_start = 450.0;
+
+    
+    //Generating the bottom chamfer
+    let bottom_chamfer_length = max_len - bottom_chamfer_start;
+
+    //The angle of the chamfer applied to the bottom of the body
+    let bottom_chamfer_angle = {
+        let height = outer_height - back_height;
+
+        ((height/bottom_chamfer_length) as f32).asin()
+    };
+
+    //The total length of the body
+    let body_length = bottom_chamfer_start + bottom_chamfer_length * bottom_chamfer_angle.cos();
+
+    let chamfer_cutoff = scad!(Translate(vec3(bottom_chamfer_start, 0.0, 0.0));
+    {
+        scad!(Rotate(-bottom_chamfer_angle.to_degrees(), vec3(0.0, 1.0, 0.0));
+        {
+            scad!(Translate(vec3(0.0, 0.0, -outer_height));
+                scad!(Cube(vec3(body_length, outer_width, outer_height)))
+            ),
+        }),
+    });
+
+    //Calculating the chamfer for the sides
+    let side_chamfer_length = body_length - side_chamfer_start;
+    let side_chamfer_angle = {
+        let width = outer_width / 2.0 - back_width / 2.0;
+        
+        ((width/side_chamfer_length) as f32).asin()
+    };
+
+    let side_chamfer_cutoff = scad!(Translate(vec3(side_chamfer_start, outer_width / 2.0, 0.0));
+    {
+        scad!(Rotate(-side_chamfer_angle.to_degrees(), vec3(0.0, 0.0, 1.0));
+            scad!(Cube(vec3(body_length, outer_width, outer_height)))
+        ),
+    });
+
+    let other_side_cutoff = scad!(Mirror(vec3(0.0, 1.0, 0.0));
+        side_chamfer_cutoff.clone()
+    );
+
+    scad!(Union;
+    {
+        scad!(Difference;
+        {
+            scad!(Cube(vec3(body_length, outer_width, outer_height))),
+            chamfer_cutoff,
+
+            scad!(Translate(vec3(0.0, outer_width / 2.0, 0.0));
+            {
+                side_chamfer_cutoff.clone()
+            }),
+            scad!(Translate(vec3(0.0,outer_width / 2.0, 0.0));
+            {
+                other_side_cutoff
+            })
+        }),
+    })
+}
+
 pub fn main()
 {
     //Create an scad object
@@ -180,6 +299,12 @@ pub fn main()
 
     sfile.set_detail(50);
     //sfile.add_object(translation);
-    sfile.add_object(motor_pod());
+    //sfile.add_object(motor_pod());
+    sfile.add_object(
+        scad!(Difference;
+        {
+            body(),
+            scad!(Cube(vec3(750.0, 1000.0, 1000.0))),
+        }));
     sfile.write_to_file(String::from("cargo_auto.scad"));
 }
