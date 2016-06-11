@@ -1,51 +1,7 @@
-$fn=50;
+$fn=100;
+
 difference()
 {
-	difference()
-	{
-		translate([0,10,10])
-		{
-			union()
-			{
-				difference()
-				{
-					cube([788.74817,130,120]);
-					translate([350,0,0])
-					{
-						rotate(-12.839588,[0,1,0])
-						{
-							translate([0,0,-120])
-							{
-								cube([788.74817,130,120]);
-							}
-						}
-					}
-					translate([0,65,0])
-					{
-						translate([450,65,0])
-						{
-							rotate(-9.34405,[0,0,1])
-							{
-								cube([788.74817,130,120]);
-							}
-						}
-					}
-					translate([0,65,0])
-					{
-						mirror([0,1,0])
-						{
-							translate([450,65,0])
-							{
-								rotate(-9.34405,[0,0,1])
-								{
-									cube([788.74817,130,120]);
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	cube([750,1000,1000]);
+    cylinder(r=10, h=2);
+    cylinder(d = 4.5, h=2);
 }

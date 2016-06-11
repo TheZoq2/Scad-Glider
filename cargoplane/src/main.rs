@@ -9,6 +9,34 @@ extern crate nalgebra as na;
 use scad_generator::*;
 
 
+//Unit size nut
+fn base_nut() -> ScadObject
+{
+    let cube_len = 1.0/2.0;
+    let cube_width = 30.0_f32.to_radians().sin() / 30.0_f32.to_radians().cos();
+
+    let mut result = scad!(Union);
+
+    for i in 0..6
+    {
+        result.add_child(
+            scad!(Rotate(60.0 * i as f32 + 30.0, vec3(0.0, 0.0, 1.0));
+            {
+                scad!(Translate(vec3(-cube_width / 2.0, 0.0, 0.0)); scad!(Cube(vec3(cube_width, cube_len, 1.0))))
+            })
+        );
+    }
+
+    result
+}
+
+fn nut(width: f32, height: f32) -> ScadObject
+{
+    scad!(Scale(vec3(width, width, height));
+    {
+        base_nut()
+    })
+}
 
 fn triangle(height: f32, thickness: f32) -> ScadObject
 {
@@ -55,6 +83,64 @@ fn right_angle_bracket() -> ScadObject
         triangle(triangle_height, triangle_thickness)
     })
 }
+
+fn body_screw_bar() -> ScadObject
+{
+    let length = 130.0;
+    let width = 15.0;
+    let height = 20.0;
+    let top_thickness = 5.0;
+    let side_thickness = 2.0;
+
+    let screw_diameter = 4.5;
+    let nut_width = 7.5;
+    let nut_height = top_thickness * 0.5;
+    let nut_offset = length * 0.66;
+
+    let mut result = scad!(Union);
+
+    let bar = scad!(Union;
+    {
+        scad!(Cube(vec3(length/2.0, width, top_thickness))),
+        scad!(Translate(vec3(length/2.0 - side_thickness, 0.0, 0.0));
+        {
+            scad!(Cube(vec3(side_thickness, width, height))),
+            scad!(Translate(vec3(0.0, width/2.0, 0.0));
+            {
+                scad!(Rotate(180.0, vec3(0.0,0.0,1.0));
+                {
+                    triangle(height * 0.75, side_thickness)
+                })
+            })
+        }),
+    });
+    let screws = 
+    scad!(Translate(vec3(nut_offset / 2.0, width/2.0, top_thickness));
+    {
+        scad!(Mirror(vec3(0.0,0.0,1.0));
+        {
+            nut(nut_width, nut_height),
+            scad!(Cylinder(top_thickness, Diameter(screw_diameter)))
+        })
+    });
+
+    for i in 0..2
+    {
+        result.add_child(
+        scad!(Mirror(vec3(i as f32, 0.0, 0.0));
+        {
+            scad!(Difference;
+            {
+                bar.clone(),
+                screws.clone()
+            })
+        })
+        );
+    }
+
+    result
+}
+
 
 fn generic_motor_holes(small_diameter: f32, big_diameter: f32, screw_diameter: f32) -> ScadObject 
 {
@@ -201,12 +287,12 @@ fn wings() -> ScadObject
 fn body() -> ScadObject
 {
     let inner_width = 130.0;
-    let inner_height = 120.0;
+    let inner_height = 110.0;
     let foam_t = 5.0;
 
     //The outside size at the end of the body
     let outer_back_width = 40.0;
-    let outer_back_height = 40.0;
+    let outer_back_height = 30.0;
 
     //Calculated values
     let outer_height = inner_height + foam_t * 4.0;
@@ -300,11 +386,13 @@ pub fn main()
     sfile.set_detail(50);
     //sfile.add_object(translation);
     //sfile.add_object(motor_pod());
-    sfile.add_object(
-        scad!(Difference;
-        {
-            body(),
-            scad!(Cube(vec3(750.0, 1000.0, 1000.0))),
-        }));
+    //sfile.add_object(
+    //    scad!(Difference;
+    //    {
+    //        body(),
+    //        scad!(Cube(vec3(750.0, 1000.0, 1000.0))),
+    //    }));
+    sfile.add_object(body_screw_bar());
+
     sfile.write_to_file(String::from("cargo_auto.scad"));
 }
