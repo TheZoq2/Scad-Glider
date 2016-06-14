@@ -4,39 +4,11 @@
 #[macro_use]
 extern crate scad_generator;
 extern crate nalgebra as na;
+extern crate scad_util as su;
 
 //Avoid having to write scad_generator:: everywhere
 use scad_generator::*;
 
-
-//Unit size nut
-fn base_nut() -> ScadObject
-{
-    let cube_len = 1.0/2.0;
-    let cube_width = 30.0_f32.to_radians().sin() / 30.0_f32.to_radians().cos();
-
-    let mut result = scad!(Union);
-
-    for i in 0..6
-    {
-        result.add_child(
-            scad!(Rotate(60.0 * i as f32 + 30.0, vec3(0.0, 0.0, 1.0));
-            {
-                scad!(Translate(vec3(-cube_width / 2.0, 0.0, 0.0)); scad!(Cube(vec3(cube_width, cube_len, 1.0))))
-            })
-        );
-    }
-
-    result
-}
-
-fn nut(width: f32, height: f32) -> ScadObject
-{
-    scad!(Scale(vec3(width, width, height));
-    {
-        base_nut()
-    })
-}
 
 fn triangle(height: f32, thickness: f32) -> ScadObject
 {
@@ -119,7 +91,7 @@ fn body_screw_bar() -> ScadObject
     {
         scad!(Mirror(vec3(0.0,0.0,1.0));
         {
-            nut(nut_width, nut_height),
+            su::nut(nut_width, nut_height),
             scad!(Cylinder(top_thickness, Diameter(screw_diameter)))
         })
     });
@@ -141,39 +113,35 @@ fn body_screw_bar() -> ScadObject
     result
 }
 
-
-fn generic_motor_holes(small_diameter: f32, big_diameter: f32, screw_diameter: f32) -> ScadObject 
+fn battery_tray() -> ScadObject
 {
-    let center_hole_diameter = 9.0;
+    let width = 45.0;
+    let length = 145.0;
+    let thickness = 5.0;
+    let height = 10.0;
+    let strap_width = 20.0;
+    let strap_thickness = 4.0;
+    let bottom_thickness = 2.0;
 
-    let height = 30.0;
-    let mut result = scad!(Translate(vec3(0.0,0.0,-height/2.0)));
+    let strap_hole = scad!(Translate(vec3(0.0, width/2.0 - strap_thickness, 0.0));
+        scad!(Cube(vec3(strap_width, strap_thickness, thickness)))
+    );
 
-    //Add the center hole
-    result.add_child(scad!(Cylinder(height, Diameter(center_hole_diameter))));
-
-    //Add the screwholes
-    for i in &[-1.0,1.0]
+    scad!(Difference;
     {
-        result.add_child(
-            scad!(Translate(vec3(i * small_diameter / 2.0, 0.0, 0.0));
-            {
-                scad!(Cylinder(height, Diameter(screw_diameter)))
-            }),
-        );
-        result.add_child(
-            scad!(Translate(vec3(0.0, i * big_diameter / 2.0, 0.0));
-            {
-                scad!(Cylinder(height, Diameter(screw_diameter)))
-            }),
-        );
-    }
+        scad!(Translate(vec3(-(length + thickness)/2.0,-(width + thickness)/2.0,0.0));
+              scad!(Cube(vec3(length + thickness, width + thickness, height)))
+        ),
+        scad!(Translate(vec3(-length/2.0,-width/2.0,bottom_thickness)); scad!(Cube(vec3(length, width, 20.0)))),
 
-    return result;
+        strap_hole.clone(),
+        scad!(Mirror(vec3(0.0, 1.0, 0.0)); strap_hole)
+    })
 }
+
 fn get_motor_holes() -> ScadObject 
 {
-    generic_motor_holes(16.0, 19.0, 3.5)
+    su::rc::generic_motor_holes(16.0, 19.0, 3.5)
 }
 
 fn motor_pod_shape(outside_size: na::Vector3<f32>) -> ScadObject
@@ -281,6 +249,50 @@ fn wings() -> ScadObject
         {
             scad!(Cube(vec3(tail_width, tailspan, thickness)))
         })
+    })
+}
+
+fn nose_attacher() -> ScadObject
+{
+    let height = 10.0;
+    let width = 9.0;
+    let screw_diameter = 3.5;
+    let length = 10.0;
+    let bottom_width = 20.0;
+    let bottom_thickness = 2.0;
+    let screw_height = height * 0.7;
+
+    let main_cube = scad!(Translate(vec3(0.0, -width/2.0, 0.0)); scad!(Cube(vec3(length, width, height))));
+    let bottom_cube = scad!(Translate(vec3(0.0, -bottom_width/2.0, -bottom_thickness));
+    {
+        scad!(Cube(vec3(length, bottom_width, bottom_thickness)))
+    });
+
+    let screwhole = scad!(Translate(vec3(0.0, 0.0, screw_height));
+    {
+        scad!(Rotate(90.0, vec3(0.0, 1.0, 0.0));
+        {
+            scad!(Cylinder(length, Diameter(screw_diameter))) 
+        })
+        
+    });
+
+    let chamfer = scad!(Translate(vec3(0.0, width/2.0, height * 0.8));
+    {
+        scad!(Rotate(45.0, vec3(1.0, 0.0, 0.0));
+            scad!(Cube(vec3(length, width, height)))
+        )
+    });
+
+    scad!(Difference;
+    {
+        scad!(Union;
+            main_cube,
+            bottom_cube
+        ),
+        screwhole,
+        chamfer.clone(),
+        scad!(Mirror(vec3(0.0, 1.0, 0.0)); chamfer.clone())
     })
 }
 
@@ -392,7 +404,9 @@ pub fn main()
     //        body(),
     //        scad!(Cube(vec3(750.0, 1000.0, 1000.0))),
     //    }));
-    sfile.add_object(body_screw_bar());
+    //sfile.add_object(body_screw_bar());
+    //sfile.add_object(battery_tray());
+    sfile.add_object(nose_attacher());
 
     sfile.write_to_file(String::from("cargo_auto.scad"));
 }

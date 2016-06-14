@@ -1,7 +1,39 @@
-$fn=100;
-
+$fn=50;
 difference()
 {
-    cylinder(r=10, h=2);
-    cylinder(d = 4.5, h=2);
+	union()
+	{
+		translate([0,-4.5,0])
+		{
+			cube([10,9,10]);
+		}
+		translate([0,-10,-2])
+		{
+			cube([10,20,2]);
+		}
+	}
+	translate([0,0,7])
+	{
+		rotate(90,[0,1,0])
+		{
+			cylinder(h=10,d=3.5);
+		}
+	}
+	translate([0,4.5,8])
+	{
+		rotate(45,[1,0,0])
+		{
+			cube([10,9,10]);
+		}
+	}
+	mirror([0,1,0])
+	{
+		translate([0,4.5,8])
+		{
+			rotate(45,[1,0,0])
+			{
+				cube([10,9,10]);
+			}
+		}
+	}
 }
