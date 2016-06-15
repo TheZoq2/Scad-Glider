@@ -9,6 +9,160 @@ extern crate scad_util as su;
 //Avoid having to write scad_generator:: everywhere
 use scad_generator::*;
 
+struct MotorPod
+{
+    outside_size: na::Vector3<f32>,
+    screw_z_offset: f32,
+    screw_locations: [f32;2],
+    screw_diameter: f32,
+    wall_thickness: f32,
+}
+
+impl MotorPod 
+{
+    pub fn new() -> MotorPod 
+    {
+        MotorPod {
+            outside_size: vec3(140.0, 35.0, 30.0),
+            screw_z_offset: 6.0,
+            screw_locations: [50.0, 80.0],
+            screw_diameter: 3.6,
+            wall_thickness: 2.0,
+        }
+    }
+
+    fn get_shape(&self, shape_size: na::Vector3<f32>) -> ScadObject
+    {
+        let back_chamfer_length = 0.5;
+        let back_angle = {
+            let back_len = shape_size.x * back_chamfer_length;
+
+            let back_height_offset = 5.0;
+
+            ((shape_size.z - back_height_offset) / back_len).atan()
+        };
+
+        //Creating block that will chamfer the back edge
+        let chamfer = scad!(Rotate(-back_angle / std::f32::consts::PI * 180.0, vec3(0.0, 1.0, 0.0));
+        {
+            scad!(Translate(vec3(0.0, 0.0, -shape_size.z));
+            {
+                scad!(Cube(shape_size))
+            })
+        });
+
+
+        scad!(Difference;
+        {
+            scad!(Cube(shape_size)),
+            scad!(Translate(vec3(shape_size.x * back_chamfer_length, 0.0, 0.0));
+            chamfer)
+        })
+    }
+
+    fn get_screwholes(&self) -> ScadObject
+    {
+        let mut result = scad!(Union);
+
+        for location in &self.screw_locations
+        {
+            result.add_child(scad!(Translate(vec3(location.clone(), 0.0, 0.0));
+            {
+                scad!(Rotate(-90.0, vec3(1.0, 0.0, 0.0));
+                {
+                    scad!(Cylinder(self.outside_size.y, Diameter(self.screw_diameter)))
+                })
+            }));
+        }
+        result
+    }
+
+    pub fn main_pod(&self) -> ScadObject 
+    {
+        //The height of the tabs that will go into the foam
+        let front_wall_multiplyer = 3.0;
+
+        //Generating the actual pod
+        let outside_shape = self.get_shape(self.outside_size);
+        let inside_shape = scad!(Translate(vec3(self.wall_thickness * front_wall_multiplyer, self.wall_thickness, self.wall_thickness));
+        {
+            self.get_shape(self.outside_size - vec3(self.wall_thickness * (front_wall_multiplyer+2.0), self.wall_thickness * 2.0, 0.0))
+        });
+
+        let motor_holes = scad!(Translate(vec3(0.0, self.outside_size.y / 2.0, self.outside_size.z / 2.0));
+        {
+            scad!(Rotate(90.0, vec3(0.0, 1.0, 0.0));
+            {
+                get_motor_holes(),
+            })
+        });
+
+
+        scad!(Difference;
+        {
+            outside_shape,
+            inside_shape,
+            motor_holes,
+            scad!(Translate(vec3(0.0, 0.0, self.outside_size.z - self.screw_z_offset));
+            {
+                self.get_screwholes(),
+            })
+        })
+    }
+
+    pub fn pod_mount(&self) -> ScadObject
+    {
+        let top_thickness = 5.0;
+        let screw_padding = self.screw_diameter;
+        let side_padding = 0.5;
+
+        //TODO: Add hole for carbon spar
+
+        let top_cube = scad!(Cube(vec3(self.outside_size.x, self.outside_size.y, top_thickness)));
+
+        //Calculating the length of the mounting block.
+        let mount_length = self.screw_locations.last().unwrap() - self.screw_locations.first().unwrap() + screw_padding * 2.0;
+        let mount_height = self.screw_z_offset + screw_padding;
+        let mount_width = self.outside_size.y - self.wall_thickness * 2.0 - side_padding * 2.0;
+        
+        //Create the actual cube with the mounts
+        let mount_cube_x_offset = self.screw_locations.first().unwrap() - screw_padding;
+        let mount_cube = scad!(Translate(vec3(mount_cube_x_offset, self.wall_thickness + side_padding, top_thickness));
+        {
+            scad!(Cube(vec3(mount_length, mount_width, mount_height)))
+        });
+
+        
+        let carbon_spar_height = 3.0;
+        let carbon_spar_radius = 10.0;
+        let mut carbon_spar_hole = scad!(Translate(vec3(self.outside_size.x/2.0, 0., -carbon_spar_radius + carbon_spar_height));
+        {
+            scad!(Rotate(-90., vec3(1., 0., 0.));
+            {
+                scad!(Cylinder(self.outside_size.y, Radius(carbon_spar_radius)))
+            })
+        });
+
+        //carbon_spar_hole.is_important();
+
+        scad!(Difference;
+        {
+            scad!(Union;
+            {
+                top_cube,
+                mount_cube,
+            }),
+
+            scad!(Translate(vec3(0.0, 0.0, top_thickness + self.screw_z_offset));
+            {
+                self.get_screwholes()
+            }),
+            
+            carbon_spar_hole
+        })
+    }
+}
+
 
 fn triangle(height: f32, thickness: f32) -> ScadObject
 {
@@ -144,85 +298,7 @@ fn get_motor_holes() -> ScadObject
     su::rc::generic_motor_holes(16.0, 19.0, 3.5)
 }
 
-fn motor_pod_shape(outside_size: na::Vector3<f32>) -> ScadObject
-{
-    let back_chamfer_length = 0.5;
-    let back_angle = {
-        let back_len = outside_size.x * back_chamfer_length;
 
-        let back_height_offset = 5.0;
-
-        ((outside_size.z - back_height_offset) / back_len).atan()
-    };
-
-    //Creating block that will chamfer the back edge
-    let chamfer = scad!(Rotate(-back_angle / std::f32::consts::PI * 180.0, vec3(0.0, 1.0, 0.0));
-    {
-        scad!(Translate(vec3(0.0, 0.0, -outside_size.z));
-        {
-            scad!(Cube(outside_size))
-        })
-    });
-
-
-    scad!(Difference;
-    {
-        scad!(Cube(outside_size)),
-        scad!(Translate(vec3(outside_size.x * back_chamfer_length, 0.0, 0.0));
-        chamfer)
-    })
-}
-
-fn motor_pod() -> ScadObject 
-{
-    let outside_size = vec3(140.0, 35.0, 30.0);
-    //The height of the tabs that will go into the foam
-    let wall_thickness = 2.0;
-    let front_wall_multiplyer = 3.0;
-
-    let skewer_z_offset = 6.0;
-    let skewer_locations = [50.0, 80.0, 100.0];
-    let skewer_diameter = 3.0;
-
-    //Generating the actual pod
-    let outside_shape = motor_pod_shape(outside_size);
-    let inside_shape = scad!(Translate(vec3(wall_thickness * front_wall_multiplyer, wall_thickness, wall_thickness));
-    {
-        motor_pod_shape(outside_size - vec3(wall_thickness * (front_wall_multiplyer+2.0), wall_thickness * 2.0, 0.0))
-    });
-
-    let motor_holes = scad!(Translate(vec3(0.0, outside_size.y / 2.0, outside_size.z / 2.0));
-    {
-        scad!(Rotate(90.0, vec3(0.0, 1.0, 0.0));
-        {
-            get_motor_holes(),
-        })
-    });
-
-    let skewer_holes = {
-        let mut result = scad!(Union);
-
-        for location in &skewer_locations
-        {
-            result.add_child(scad!(Translate(vec3(location.clone(), 0.0, outside_size.z - skewer_z_offset));
-            {
-                scad!(Rotate(-90.0, vec3(1.0, 0.0, 0.0));
-                {
-                    scad!(Cylinder(outside_size.y, Diameter(skewer_diameter)))
-                })
-            }));
-        }
-        result
-    };
-
-    scad!(Difference;
-    {
-        outside_shape,
-        inside_shape,
-        motor_holes,
-        skewer_holes,
-    })
-}
 
 fn wings() -> ScadObject 
 {
@@ -397,7 +473,13 @@ pub fn main()
 
     sfile.set_detail(50);
     //sfile.add_object(translation);
-    //sfile.add_object(motor_pod());
+    //sfile.add_object(MotorPod::new().main_pod());
+
+    //sfile.add_object(scad!(Translate(vec3(0.0, 0.0, 50.0));
+    //{
+    //    MotorPod::new().pod_mount(),
+    //}));
+    sfile.add_object(MotorPod::new().pod_mount());
     //sfile.add_object(
     //    scad!(Difference;
     //    {
@@ -406,7 +488,7 @@ pub fn main()
     //    }));
     //sfile.add_object(body_screw_bar());
     //sfile.add_object(battery_tray());
-    sfile.add_object(nose_attacher());
+    //sfile.add_object(nose_attacher());
 
     sfile.write_to_file(String::from("cargo_auto.scad"));
 }

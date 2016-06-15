@@ -3,37 +3,37 @@ difference()
 {
 	union()
 	{
-		translate([0,-4.5,0])
+		cube([140,35,5]);
+		translate([46.4,2.5,5])
 		{
-			cube([10,9,10]);
-		}
-		translate([0,-10,-2])
-		{
-			cube([10,20,2]);
+			cube([37.2,30,9.6]);
 		}
 	}
-	translate([0,0,7])
+	translate([0,0,11])
 	{
-		rotate(90,[0,1,0])
+		union()
 		{
-			cylinder(h=10,d=3.5);
-		}
-	}
-	translate([0,4.5,8])
-	{
-		rotate(45,[1,0,0])
-		{
-			cube([10,9,10]);
-		}
-	}
-	mirror([0,1,0])
-	{
-		translate([0,4.5,8])
-		{
-			rotate(45,[1,0,0])
+			translate([50,0,0])
 			{
-				cube([10,9,10]);
+				rotate(-90,[1,0,0])
+				{
+					cylinder(h=35,d=3.6);
+				}
 			}
+			translate([80,0,0])
+			{
+				rotate(-90,[1,0,0])
+				{
+					cylinder(h=35,d=3.6);
+				}
+			}
+		}
+	}
+	translate([70,0,-7])
+	{
+		rotate(-90,[1,0,0])
+		{
+			cylinder(h=35,r=10);
 		}
 	}
 }
