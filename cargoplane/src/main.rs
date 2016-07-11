@@ -135,7 +135,7 @@ impl MotorPod
         
         let carbon_spar_height = 3.0;
         let carbon_spar_radius = 10.0;
-        let mut carbon_spar_hole = scad!(Translate(vec3(self.outside_size.x/2.0, 0., -carbon_spar_radius + carbon_spar_height));
+        let carbon_spar_hole = scad!(Translate(vec3(self.outside_size.x/2.0, 0., -carbon_spar_radius + carbon_spar_height));
         {
             scad!(Rotate(-90., vec3(1., 0., 0.));
             {
@@ -143,7 +143,39 @@ impl MotorPod
             })
         });
 
-        //carbon_spar_hole.is_important();
+        //Wire holes
+        let wire_holes = {
+            let hole_radius = 10.0;
+            let front_padding = 7.0;
+            let back_padding = 24.0;
+
+            let single_side = {
+                scad!(Union;
+                {
+                    scad!(Translate(vec3(front_padding, 0.0, 0.0));
+                    {
+                        scad!(Cylinder(top_thickness, Radius(hole_radius)))
+                    }),
+                    scad!(Translate(vec3(self.outside_size.x - back_padding, 0.0, 0.0));
+                    {
+                        scad!(Cylinder(top_thickness, Radius(hole_radius)))
+                    })
+                })
+            };
+
+            scad!(Translate(vec3(0.0, self.outside_size.y / 2.0, 0.0));
+            {
+                scad!(Translate(vec3(0.0, -self.outside_size.y / 2.0, 0.0));
+                    single_side.clone()
+                ),
+                scad!(Mirror(vec3(0.0, 1.0, 0.0));
+                {
+                    scad!(Translate(vec3(0.0, -self.outside_size.y / 2.0, 0.0));
+                        single_side.clone()
+                    )
+                })
+            })
+        };
 
         scad!(Difference;
         {
@@ -158,7 +190,83 @@ impl MotorPod
                 self.get_screwholes()
             }),
             
-            carbon_spar_hole
+            carbon_spar_hole,
+            wire_holes,
+        })
+    }
+}
+
+qstruct!{
+    WingStrutHolder()
+    {
+        width: f32 = 30.,
+        height: f32 = 20.,
+        back_thickness: f32 = 4.,
+
+        screwhole_diameter: f32 = 3.5,
+        screw_padding: f32 = 4.,
+
+        nut_width: f32 = 6.1,
+
+        string_hole_width: f32 = 12.,
+        string_hole_thickness: f32 = 4.,
+
+        top_thickness: f32 = 8.,
+    }
+}
+
+impl WingStrutHolder
+{
+    pub fn screw_positions(&self, height: f32, hole: ScadObject) -> ScadObject 
+    {
+        let mut screws = scad!(Translate(vec3(self.width/2., self.height/2., 0.)));
+        
+        for i in 0..2
+        {
+            screws.add_child(scad!(Rotate(i as f32 * 180., vec3(0., 0., 1.));
+            {
+                scad!(Translate(vec3(self.width/2. - self.screw_padding, 0., 0.));
+                {
+                    hole.clone()
+                })
+            }));
+        }
+
+        screws
+    }
+
+    pub fn get_back_part(&self) -> ScadObject
+    {
+        let screwholes = scad!(Union;{
+            scad!(Cylinder(self.back_thickness, Diameter(self.screwhole_diameter))),
+            su::nut(self.nut_width, self.back_thickness / 2.)
+        });
+
+        scad!(Difference;{
+            scad!(Cube(vec3(self.width, self.height, self.back_thickness))),
+            self.screw_positions(self.back_thickness, screwholes)
+        })
+    }
+
+    pub fn get_top_part(&self) -> ScadObject
+    {
+        let string_hole = scad!(Cube(vec3(self.string_hole_width, 
+                                          self.height, 
+                                          self.string_hole_thickness)));
+
+
+        let body = scad!(Cube(vec3(self.width, self.height, self.top_thickness)));
+
+        scad!(Difference;
+        {
+            body,
+
+            scad!(Translate(vec3(self.width / 2. - self.string_hole_width /2., 0., 1.));
+            {
+                string_hole,
+
+            }),
+            self.screw_positions(self.top_thickness, scad!(Cylinder(self.top_thickness, Diameter(self.screwhole_diameter)))),
         })
     }
 }
@@ -271,33 +379,130 @@ fn battery_tray() -> ScadObject
 {
     let width = 45.0;
     let length = 145.0;
-    let thickness = 5.0;
+    let thickness = 7.0;
     let height = 10.0;
-    let strap_width = 20.0;
-    let strap_thickness = 4.0;
-    let bottom_thickness = 2.0;
+    let strap_width = 25.0;
+    let strap_thickness = 5.0;
+    let bottom_length = 45.0;
+    let bottom_thickness = 10.0;
 
-    let strap_hole = scad!(Translate(vec3(0.0, width/2.0 - strap_thickness, 0.0));
-        scad!(Cube(vec3(strap_width, strap_thickness, thickness)))
-    );
+    let strap_locations = vec!(10.0, 75.0);
+
+
+    let main_cube = scad!(Translate(vec3(0.0, 0.0, bottom_thickness));
+    {
+        scad!(Cube(vec3(length, width, thickness)))
+    });
+
+    let bottom_cube = scad!(Cube(vec3(bottom_length, width, bottom_thickness)));
+
+    let strap_holes = {
+        let mut result = scad!(Union);
+
+        for pos in strap_locations
+        {
+            result.add_child(scad!(Translate(vec3(pos, 0.0, bottom_thickness));
+            {
+                scad!(Cube(vec3(strap_width, width, strap_thickness)))
+            }));
+        }
+
+        result
+    };
 
     scad!(Difference;
     {
-        scad!(Translate(vec3(-(length + thickness)/2.0,-(width + thickness)/2.0,0.0));
-              scad!(Cube(vec3(length + thickness, width + thickness, height)))
+        scad!(Union;
+            main_cube,
+            bottom_cube
         ),
-        scad!(Translate(vec3(-length/2.0,-width/2.0,bottom_thickness)); scad!(Cube(vec3(length, width, 20.0)))),
-
-        strap_hole.clone(),
-        scad!(Mirror(vec3(0.0, 1.0, 0.0)); strap_hole)
+        strap_holes
     })
 }
 
 fn get_motor_holes() -> ScadObject 
 {
-    su::rc::generic_motor_holes(16.0, 19.0, 3.5)
+    su::radio_control::generic_motor_holes(16.0, 19.0, 3.5)
 }
 
+qstruct!{
+    ControllerMount()
+    {
+        board_width: f32 = 55.5,
+        board_thickness: f32 = 2.5,
+
+        bottom_thickness:f32 = 5.0,
+
+        board_part_length: f32 = 4.,
+        outside_part_length: f32 = 6.,
+
+        side_padding: f32 = 3.,
+        top_padding:f32 = 2.,
+
+        screw_diameter: f32 = 3.5,
+        nut_width: f32 = 6.1,
+    }
+}
+
+impl ControllerMount 
+{
+    pub fn get_back(&self) -> ScadObject 
+    {
+        let len = self.board_part_length + self.outside_part_length;
+        let thickness = self.board_thickness + self.bottom_thickness + self.top_padding; 
+
+        let main = scad!(Cube(vec3(self.board_width + self.side_padding * 2., len, thickness)));
+
+        let board = scad!(Translate(vec3(self.side_padding, self.outside_part_length, self.bottom_thickness));
+        {
+            scad!(Cube(vec3(self.board_width, self.board_part_length, self.board_thickness)))
+        });
+
+        scad!(Difference;
+        {
+            main,
+            board
+        })
+    }
+    
+    pub fn get_front_top(&self) -> ScadObject
+    {
+        scad!(Difference;{
+            self.get_back(),
+            self.screwholes(),
+            scad!(Cube(vec3(1000., 1000., self.bottom_thickness - 1.)))
+        })
+    }
+
+    pub fn get_front_bottom(&self) -> ScadObject
+    {
+        scad!(Difference;{
+            self.get_back(),
+            self.screwholes(),
+            scad!(Translate(vec3(0., 0., self.bottom_thickness - 1.));
+            {
+                scad!(Cube(vec3(1000., 1000., 10000.)))
+            })
+        })
+    }
+
+    fn screwholes(&self) -> ScadObject 
+    {
+        let screw = scad!(Union;{
+            scad!(Cylinder(100., Diameter(self.screw_diameter))),
+            su::nut(self.nut_width, self.bottom_thickness - 3.),
+        });
+
+        scad!(Translate(vec3(0., self.outside_part_length / 2., 0.));{
+            scad!(Translate(vec3(self.side_padding, 0., 0.));{
+                screw.clone()
+            }),
+            scad!(Translate(vec3(self.side_padding + self.board_width, 0., 0.));{
+                screw.clone()
+            }),
+        })
+    }
+}
 
 
 fn wings() -> ScadObject 
@@ -479,7 +684,7 @@ pub fn main()
     //{
     //    MotorPod::new().pod_mount(),
     //}));
-    sfile.add_object(MotorPod::new().pod_mount());
+    //sfile.add_object(MotorPod::new().pod_mount());
     //sfile.add_object(
     //    scad!(Difference;
     //    {
@@ -489,6 +694,14 @@ pub fn main()
     //sfile.add_object(body_screw_bar());
     //sfile.add_object(battery_tray());
     //sfile.add_object(nose_attacher());
+    //sfile.add_object(WingStrutHolder::new().get_back_part());
+
+    //sfile.add_object(scad!(Translate(vec3(0., 0., 10.));{
+    //    WingStrutHolder::new().get_top_part(),
+    //}));
+    
+    //sfile.add_object(ControllerMount::new().get_front_top());
+    sfile.add_object(ControllerMount::new().get_front_bottom());
 
     sfile.write_to_file(String::from("cargo_auto.scad"));
 }
